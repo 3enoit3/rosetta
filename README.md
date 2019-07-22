@@ -1,2 +1,2 @@
 # rosetta
-Similar pattern in different languages
+Similar patterns in different languages
