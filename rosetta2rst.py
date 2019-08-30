@@ -32,27 +32,47 @@ def tokenize_rst(lines):
             yield lines[i:j]
             i = j
 
+def is_rosetta(token):
+    return poke_header(token, 0)
+
 # rosetta
 def poke_column(lines, i):
     if i >= len(lines):
         return False
     line = lines[i][1].strip()
-    return line.startswith("|") and line.endswith("|")
+    return line.startswith("|") and line.count("|") >= 2
+
+def poke_row(lines, i):
+    if i >= len(lines):
+        return False
+    line = lines[i][1].strip()
+    return line == "--"
+
+def poke_delim(lines, i):
+    return poke_column(lines, i) or poke_row(lines, i)
 
 def tokenize_rosetta(lines):
     i = 0
     while i < len(lines):
-        j = take_until(lines, i+1, poke_column)
+        j = take_until(lines, i+1, poke_delim)
         yield lines[i:j]
         i = j
 
-def get_type(lines):
-    if not poke_column(lines, 0):
+def is_column(token):
+    return poke_column(token, 0)
+
+def is_row(token):
+    return poke_row(token, 0)
+
+def split_column(token):
+    if not is_column(token):
         return None
-    fields = lines[0][1].strip().split("|")
-    if len(fields) < 2:
+    header_fields = token[0][1].strip().split("|")
+    if len(header_fields) < 2:
         return None
-    return fields[1].strip()
+    lang = header_fields[1].strip()
+    code = [(token[0][0], header_fields[2])] + token[1:]
+    return lang, code
 
 # html
 def generate_html_code(lines):
@@ -67,6 +87,11 @@ def generate_html_table(headers, rows):
     return "<table>\n"+ headers + "\n" + body + "\n</table>"
 
 # logic
+def generate_block(block):
+    tokens = tokenize_rosetta(block)
+    for token in token:
+        pass
+
 def generate(rst):
     return """
 P1
@@ -93,6 +118,16 @@ P1
 
 P2
 """
+    out = []
+    lines = enumerate(rst.splitlines())
+    blocks = tokenize_rst(lines)
+    for block in blocks:
+        is_rosetta = poke_header(block, 0)
+        if is_rosetta:
+            out += generate_block(block)
+        else:
+            out += block
+
 def main():
     """Entry point"""
 
@@ -147,10 +182,10 @@ class Tests(unittest.TestCase):
         tokens = tokenize_rosetta(block)
         self.assertEqualGenerators(ref_tokens, tokens)
 
-        self.assertEqual(get_type(self.enumerate(["\t|c++|","\tint i;"])), "c++")
-        self.assertEqual(get_type(self.enumerate(["    |   c++   |   ","\tint i;"])), "c++")
-        self.assertEqual(get_type(self.enumerate(["\tc++   |","\tint i;"])), None)
-        self.assertEqual(get_type(self.enumerate(["\t|c++","\tint i;"])), None)
+        self.assertEqual(split_column(self.enumerate(["\t|c++|\tint i;"])), ("c++", [(0,"\tint i;")]))
+        self.assertEqual(split_column(self.enumerate(["    |   c++   |   int i;"])), ("c++", [(0,"   int i;")]))
+        self.assertEqual(split_column(self.enumerate(["\tc++   |","\tint i;"])), None)
+        self.assertEqual(split_column(self.enumerate(["\t|c++","\tint i;"])), None)
 
     def test_html(self):
         self.assertEqual(generate_html_code(["int"]), "int")
